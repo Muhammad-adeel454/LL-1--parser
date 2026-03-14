@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LL(1) Parser</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f8f8f7;--bg2:#ffffff;--bg3:#f1f0ef;
+  --text:#1a1a1a;--text2:#666;--text3:#999;
+  --border:#e5e5e5;--border2:#d0d0d0;
+  --green-bg:#edfaed;--green-txt:#1a6e1a;--green-bd:#b6e5b6;
+  --red-bg:#fdeaea;--red-txt:#a32d2d;--red-bd:#f5b8b8;
+  --blue-bg:#eaf2ff;--blue-txt:#1a4fa0;
+  --mono:'Courier New',monospace;--sans:system-ui,-apple-system,sans-serif;
+  --radius:8px;--radius-lg:12px;
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+
+/* ── Header ── */
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 2rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.hlogo{display:flex;align-items:center;gap:10px}
+.hlogo-text{font-size:16px;font-weight:600;letter-spacing:-0.4px}
+.hlogo-sub{font-size:12px;color:var(--text2);font-weight:400}
+.hbadge{font-size:11px;padding:3px 9px;border-radius:20px;background:var(--blue-bg);color:var(--blue-txt);font-weight:500}
+
+/* ── Layout ── */
+.layout{display:grid;grid-template-columns:360px 1fr;min-height:calc(100vh - 56px)}
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:1.5rem;overflow-y:auto;position:sticky;top:56px;height:calc(100vh - 56px)}
+.content{padding:1.5rem;overflow-y:auto}
+
+/* ── Typography ── */
+.label{font-size:11px;font-weight:600;color:var(--text2);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:8px}
+.hint{font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:10px}
+code{font-family:var(--mono);font-size:11px;background:var(--bg3);padding:1px 5px;border-radius:4px}
+
+/* ── Form elements ── */
+textarea{width:100%;height:170px;font-family:var(--mono);font-size:12.5px;line-height:1.7;resize:vertical;padding:12px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg3);color:var(--text);transition:border 0.15s}
+textarea:focus{outline:none;border-color:#888;background:var(--bg2)}
+input[type=text]{width:100%;padding:9px 12px;font-family:var(--mono);font-size:13px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg3);color:var(--text);transition:border 0.15s}
+input[type=text]:focus{outline:none;border-color:#888;background:var(--bg2)}
+
+/* ── Buttons ── */
+.btn{padding:7px 14px;font-size:12px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg2);color:var(--text);cursor:pointer;font-family:var(--sans);font-weight:500;transition:all 0.1s;white-space:nowrap}
+.btn:hover{background:var(--bg3);border-color:#bbb}
+.btn:active{transform:scale(0.98)}
+.btn-primary{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+.btn-primary:hover{background:#333;border-color:#333}
+.btn-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px}
+.btn-grid .btn{font-size:11px;padding:6px 6px;text-align:center}
+.analyze-btn{width:100%;margin-top:12px;padding:10px;font-size:13px;font-weight:600;border-radius:var(--radius)}
+.parse-btn{padding:9px 18px;font-size:13px}
+
+/* ── Divider ── */
+.divider{height:1px;background:var(--border);margin:1.25rem 0}
+
+/* ── Stats ── */
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.stat{background:var(--bg3);border-radius:var(--radius);padding:10px 14px;border:1px solid var(--border)}
+.stat-val{font-size:22px;font-weight:700;line-height:1;color:var(--text)}
+.stat-lbl{font-size:11px;color:var(--text3);margin-top:3px}
+
+/* ── Badges ── */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid transparent}
+.badge-ok{background:var(--green-bg);color:var(--green-txt);border-color:var(--green-bd)}
+.badge-err{background:var(--red-bg);color:var(--red-txt);border-color:var(--red-bd)}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dot-ok{background:var(--green-txt)}
+.dot-err{background:var(--red-txt)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:1.25rem}
+.tab{padding:9px 18px;font-size:13px;border:none;background:none;cursor:pointer;color:var(--text2);border-bottom:2px solid transparent;margin-bottom:-1px;font-family:var(--sans);font-weight:500;transition:all 0.1s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);border-bottom:2px solid #1a1a1a}
+.panel{display:none}.panel.active{display:block}
+
+/* ── Cards ── */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;margin-bottom:1rem}
+.card-title{font-size:12px;font-weight:600;color:var(--text2);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:12px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+
+/* ── Pre ── */
+pre{font-family:var(--mono);font-size:12.5px;background:var(--bg3);padding:14px;border-radius:var(--radius);overflow-x:auto;line-height:1.8;border:1px solid var(--border);color:var(--text)}
+
+/* ── Two column ── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+
+/* ── Set Tables (FIRST/FOLLOW) ── */
+.set-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.set-tbl thead tr{border-bottom:1px solid var(--border)}
+.set-tbl th{text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text2);letter-spacing:0.05em;text-transform:uppercase}
+.set-tbl td{padding:8px 12px;border-bottom:1px solid var(--border)}
+.set-tbl tr:last-child td{border-bottom:none}
+.set-tbl td:first-child{font-weight:600;color:var(--text);font-size:13px}
+.set-tbl td:last-child{font-family:var(--mono);font-size:12px;color:#444}
+.set-tbl tr:hover td{background:var(--bg3)}
+
+/* ── Parsing Table ── */
+.pt-scroll{overflow-x:auto;margin-top:8px}
+.pt{border-collapse:collapse;font-size:12px;min-width:100%}
+.pt th{padding:8px 14px;background:var(--bg3);font-size:11px;font-weight:600;border:1px solid var(--border);white-space:nowrap;color:var(--text2);letter-spacing:0.04em;text-transform:uppercase}
+.pt th:first-child{background:var(--bg3)}
+.pt td{padding:7px 14px;border:1px solid var(--border);font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+.pt td.nt-cell{font-family:var(--sans);font-weight:700;background:var(--bg3);font-size:13px;color:var(--text)}
+.pt td.entry{color:var(--text);background:var(--bg2)}
+.pt td.empty{color:var(--text3);text-align:center;background:var(--bg3)}
+.conflict-info{font-size:12px;font-family:var(--mono);color:var(--red-txt);background:var(--red-bg);border:1px solid var(--red-bd);border-radius:var(--radius);padding:8px 12px;margin-top:8px}
+
+/* ── Parse Trace ── */
+.parse-row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+.trace-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.trace-tbl th{padding:8px 12px;background:var(--bg3);font-size:11px;font-weight:600;border-bottom:1px solid var(--border);text-align:left;color:var(--text2);letter-spacing:0.04em;text-transform:uppercase}
+.trace-tbl td{padding:6px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11.5px;vertical-align:top}
+.trace-tbl td:first-child{color:var(--text3);text-align:center;font-family:var(--sans);font-weight:500;width:36px}
+.trace-tbl tr.tr-accept td{background:var(--green-bg);color:var(--green-txt)}
+.trace-tbl tr.tr-error td{background:var(--red-bg);color:var(--red-txt)}
+.trace-tbl tr:hover td{background:var(--bg3)}
+.trace-tbl tr.tr-accept:hover td{background:var(--green-bg)}
+.trace-tbl tr.tr-error:hover td{background:var(--red-bg)}
+
+/* ── Error & Empty ── */
+.err-msg{font-size:12px;color:var(--red-txt);margin-top:6px;display:none}
+.empty-state{text-align:center;padding:4rem 2rem;color:var(--text3)}
+.empty-icon{font-size:40px;margin-bottom:14px;opacity:0.4}
+.empty-state h3{font-size:15px;font-weight:500;color:var(--text2);margin-bottom:6px}
+.empty-state p{font-size:13px;line-height:1.6}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hlogo">
+    <div>
+      <div class="hlogo-text">LL(1) Parser <span class="hlogo-sub">— Compiler Construction</span></div>
+    </div>
+  </div>
+  <span class="hbadge">Interactive Tool</span>
+</header>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+    <div class="label">Grammar Input</div>
+    <p class="hint">One production per line · <code>NT -> a | b</code> · spaces between every symbol · <code>epsilon</code> for ε</p>
+    <textarea id="gin">Expr -> Expr + Term | Term
+Term -> Term * Factor | Factor
+Factor -> ( Expr ) | id</textarea>
+
+    <div class="label" style="margin-top:14px">Quick Examples</div>
+    <div class="btn-grid">
+      <button class="btn" onclick="loadEx('expr')">Expression</button>
+      <button class="btn" onclick="loadEx('stmt')">If-else</button>
+      <button class="btn" onclick="loadEx('simple')">Simple</button>
+      <button class="btn" onclick="loadEx('nonll1')">Non-LL(1)</button>
+      <button class="btn" onclick="loadEx('indirect')">Indirect LR</button>
+      <button class="btn" onclick="loadEx('both')">LF + LR</button>
+    </div>
+
+    <button class="btn btn-primary analyze-btn" onclick="runAll()">Analyze Grammar →</button>
+    <div class="err-msg" id="gerr"></div>
+
+    <div class="divider"></div>
+
+    <div id="sideStats" style="display:none">
+      <div class="label">Grammar Stats</div>
+      <div class="stat-row">
+        <div class="stat"><div class="stat-val" id="stNT">—</div><div class="stat-lbl">Non-terminals</div></div>
+        <div class="stat"><div class="stat-val" id="stT">—</div><div class="stat-lbl">Terminals</div></div>
+        <div class="stat"><div class="stat-val" id="stP">—</div><div class="stat-lbl">Productions</div></div>
+        <div class="stat"><div class="stat-val" id="stC">—</div><div class="stat-lbl">Conflicts</div></div>
+      </div>
+      <div id="ll1badge" style="margin-top:4px"></div>
+    </div>
+  </div>
+
+  <!-- ── Content ── -->
+  <div class="content">
+
+    <div id="emptyState" class="empty-state">
+      <div class="empty-icon">◈</div>
+      <h3>No grammar analyzed yet</h3>
+      <p>Enter a context-free grammar on the left<br>and click <strong>Analyze Grammar</strong> to see results</p>
+    </div>
+
+    <div id="mainContent" style="display:none">
+
+      <div class="tabs">
+        <button class="tab active" onclick="showTab(0)">Transformed</button>
+        <button class="tab" onclick="showTab(1)">FIRST / FOLLOW</button>
+        <button class="tab" onclick="showTab(2)">Parsing Table</button>
+        <button class="tab" onclick="showTab(3)">Parse String</button>
+      </div>
+
+      <!-- Tab 0: Transformed -->
+      <div class="panel active" id="p0">
+        <div class="two-col">
+          <div class="card">
+            <div class="card-title">After Left Factoring</div>
+            <pre id="outLF"></pre>
+          </div>
+          <div class="card">
+            <div class="card-title">After Left Recursion Removal</div>
+            <pre id="outLR"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 1: FIRST / FOLLOW -->
+      <div class="panel" id="p1">
+        <div class="two-col">
+          <div class="card">
+            <div class="card-title">FIRST Sets</div>
+            <table class="set-tbl" id="firstTbl">
+              <thead><tr><th>Non-terminal</th><th>FIRST set</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="card-title">FOLLOW Sets</div>
+            <table class="set-tbl" id="followTbl">
+              <thead><tr><th>Non-terminal</th><th>FOLLOW set</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Parsing Table -->
+      <div class="panel" id="p2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title" style="margin:0">LL(1) Parsing Table</div>
+            <div id="tblBadge"></div>
+          </div>
+          <div id="conflictInfo"></div>
+          <div class="pt-scroll">
+            <table class="pt" id="ptTbl"></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Parse String -->
+      <div class="panel" id="p3">
+        <div class="card">
+          <div class="card-title">Input String</div>
+          <p class="hint">Enter tokens separated by spaces. End-of-input marker <code>$</code> is added automatically.</p>
+          <div class="parse-row">
+            <input type="text" id="pinput" value="id + id * id" placeholder="e.g.  id + id * id"
+              onkeydown="if(event.key==='Enter')doparse()"/>
+            <button class="btn btn-primary parse-btn" onclick="doparse()">Parse →</button>
+          </div>
+          <div class="err-msg" id="perr"></div>
+        </div>
+
+        <div id="traceCard" style="display:none" class="card">
+          <div class="card-header">
+            <div class="card-title" style="margin:0">Step-by-step Trace</div>
+            <div id="parseResult"></div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="trace-tbl">
+              <thead><tr><th>#</th><th>Stack (top→right)</th><th>Remaining Input</th><th>Action</th></tr></thead>
+              <tbody id="traceTbl"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const EX={
+  expr:`Expr -> Expr + Term | Term\nTerm -> Term * Factor | Factor\nFactor -> ( Expr ) | id`,
+  stmt:`Stmt -> if Cond then Stmt Stmt2 | other\nStmt2 -> else Stmt | epsilon\nCond -> b`,
+  simple:`Start -> First Second\nFirst -> a | epsilon\nSecond -> b`,
+  nonll1:`S -> a S a | a`,
+  indirect:`A1 -> A2 A3\nA2 -> A3 A1 | b\nA3 -> A1 A1 | a`,
+  both:`S -> S a | S b | c d | c e`
+};
+
+function loadEx(k){
+  document.getElementById('gin').value=EX[k];
+  document.getElementById('gerr').style.display='none';
+}
+
+function showTab(n){
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===n));
+  document.querySelectorAll('.panel').forEach((p,i)=>p.classList.toggle('active',i===n));
+}
+
+const isNT=(s,p)=>s in p;
+const isTerm=(s,p)=>!(s in p)&&s!=='epsilon';
+
+function parseGram(text){
+  const productions={},order=[];let start=null;
+  for(const line of text.trim().split('\n')){
+    const t=line.trim();if(!t)continue;
+    const ai=t.indexOf('->');if(ai===-1)throw new Error('Missing -> in: '+line);
+    const lhs=t.slice(0,ai).trim(),rhs=t.slice(ai+2).trim();
+    if(!lhs)throw new Error('Empty LHS');
+    if(!start)start=lhs;
+    if(!productions[lhs]){productions[lhs]=[];order.push(lhs);}
+    for(const alt of rhs.split('|')){
+      const s=alt.trim().split(/\s+/).filter(Boolean);
+      if(s.length)productions[lhs].push(s);
+    }
+  }
+  if(!start)throw new Error('Empty grammar');
+  return{productions,order,startSymbol:start};
+}
+
+function applyLF(g){
+  const p=JSON.parse(JSON.stringify(g.productions));
+  const order=[...g.order];
+  let changed=true;
+  while(changed){
+    changed=false;
+    for(const nt of [...Object.keys(p)]){
+      const pl=p[nt];let found=false;
+      for(let i=0;i<pl.length&&!found;i++){
+        for(let j=i+1;j<pl.length&&!found;j++){
+          if(pl[i][0]===nt)continue;
+          let len=0;
+          while(len<pl[i].length&&len<pl[j].length&&pl[i][len]===pl[j][len])len++;
+          if(!len)continue;
+          changed=true;found=true;
+          const pre=pl[i].slice(0,len);
+          let np=nt+"'";while(p[np])np+="'";
+          const subs=[],rem=new Set([i,j]);
+          const s1=pl[i].slice(len);subs.push(s1.length?s1:['epsilon']);
+          const s2=pl[j].slice(len);subs.push(s2.length?s2:['epsilon']);
+          for(let k=0;k<pl.length;k++){
+            if(k===i||k===j)continue;
+            let m=0;while(m<len&&m<pl[k].length&&pl[k][m]===pre[m])m++;
+            if(m===len){const sk=pl[k].slice(len);subs.push(sk.length?sk:['epsilon']);rem.add(k);}
+          }
+          p[nt]=pl.filter((_,idx)=>!rem.has(idx));
+          p[nt].push([...pre,np]);p[np]=subs;order.push(np);
+        }
+      }
+    }
+  }
+  return{productions:p,order,startSymbol:g.startSymbol};
+}
+
+function elimDLR(A,p,order){
+  const pl=p[A],al=[],be=[];
+  for(const x of pl)(x.length>0&&x[0]===A?al.push(x.slice(1)):be.push(x));
+  if(!al.length)return;
+  let Ap=A+"'";while(p[Ap])Ap+="'";
+  p[A]=be.length?be.map(b=>{const r=(b.length===1&&b[0]==='epsilon')?[]:[...b];r.push(Ap);return r;}):[[Ap]];
+  p[Ap]=[...al.map(a=>{const r=a.length?[...a]:['epsilon'];r.push(Ap);return r;}),['epsilon']];
+  order.push(Ap);
+}
+
+function removeLR(g){
+  const p=JSON.parse(JSON.stringify(g.productions));
+  const order=[...g.order];const orig=[...order];
+  for(let i=0;i<orig.length;i++){
+    const Ai=orig[i];
+    for(let j=0;j<i;j++){
+      const Aj=orig[j],np=[];
+      for(const prod of p[Ai]){
+        if(prod.length>0&&prod[0]===Aj){
+          const gamma=prod.slice(1);
+          for(const delta of p[Aj]){
+            const r=[];
+            if(!(delta.length===1&&delta[0]==='epsilon'))r.push(...delta);
+            for(const s of gamma)if(s!=='epsilon')r.push(s);
+            np.push(r.length?r:['epsilon']);
+          }
+        }else np.push(prod);
+      }
+      p[Ai]=np;
+    }
+    elimDLR(Ai,p,order);
+  }
+  return{productions:p,order,startSymbol:g.startSymbol};
+}
+
+function computeFirst(g){
+  const first={};
+  for(const nt of g.order)first[nt]=new Set();
+  let ch=true;
+  while(ch){
+    ch=false;
+    for(const nt of g.order){
+      for(const prod of g.productions[nt]){
+        if(prod.length===1&&prod[0]==='epsilon'){
+          if(!first[nt].has('epsilon')){first[nt].add('epsilon');ch=true;}
+          continue;
+        }
+        let ae=true;
+        for(const sym of prod){
+          if(sym==='epsilon')break;
+          if(isTerm(sym,g.productions)){
+            if(!first[nt].has(sym)){first[nt].add(sym);ch=true;}
+            ae=false;break;
+          }
+          for(const f of first[sym]||[])if(f!=='epsilon'&&!first[nt].has(f)){first[nt].add(f);ch=true;}
+          if(!(first[sym]||new Set()).has('epsilon')){ae=false;break;}
+        }
+        if(ae&&!first[nt].has('epsilon')){first[nt].add('epsilon');ch=true;}
+      }
+    }
+  }
+  return first;
+}
+
+function firstSeq(syms,first,g){
+  const res=new Set();
+  if(!syms.length){res.add('epsilon');return res;}
+  let ae=true;
+  for(const sym of syms){
+    if(sym==='epsilon')break;
+    if(isTerm(sym,g.productions)){res.add(sym);ae=false;break;}
+    for(const f of first[sym]||[])if(f!=='epsilon')res.add(f);
+    if(!(first[sym]||new Set()).has('epsilon')){ae=false;break;}
+  }
+  if(ae)res.add('epsilon');
+  return res;
+}
+
+function computeFollow(g,first){
+  const follow={};
+  for(const nt of g.order)follow[nt]=new Set();
+  follow[g.startSymbol].add('$');
+  let ch=true;
+  while(ch){
+    ch=false;
+    for(const nt of g.order){
+      for(const prod of g.productions[nt]){
+        for(let i=0;i<prod.length;i++){
+          const sym=prod[i];
+          if(!isNT(sym,g.productions))continue;
+          const fb=firstSeq(prod.slice(i+1),first,g);
+          for(const f of fb)if(f!=='epsilon'&&!follow[sym].has(f)){follow[sym].add(f);ch=true;}
+          if(fb.has('epsilon'))for(const f of follow[nt])if(!follow[sym].has(f)){follow[sym].add(f);ch=true;}
+        }
+      }
+    }
+  }
+  return follow;
+}
+
+function buildTable(g,first,follow){
+  const table={},conflicts=[],terms=new Set(['$']);
+  for(const nt of g.order){
+    table[nt]={};
+    for(const prod of g.productions[nt])
+      for(const sym of prod)if(isTerm(sym,g.productions))terms.add(sym);
+  }
+  for(const nt of g.order){
+    for(const prod of g.productions[nt]){
+      const fa=firstSeq(prod,first,g);
+      for(const t of fa){
+        if(t==='epsilon')continue;
+        if(table[nt][t])conflicts.push('M['+nt+']['+t+']');
+        else table[nt][t]=prod;
+      }
+      if(fa.has('epsilon')){
+        for(const t of follow[nt]){
+          if(table[nt][t])conflicts.push('M['+nt+']['+t+']');
+          else table[nt][t]=prod;
+        }
+      }
+    }
+  }
+  return{table,terminals:[...terms].sort(),conflicts};
+}
+
+function gStr(g){
+  return g.order.map(nt=>nt+' -> '+g.productions[nt].map(p=>p.join(' ')).join(' | ')).join('\n');
+}
+
+let ST={};
+
+function runAll(){
+  const errEl=document.getElementById('gerr');
+  errEl.style.display='none';
+  try{
+    const g0=parseGram(document.getElementById('gin').value);
+    const g1=applyLF(g0);
+    const g2=removeLR(g1);
+    const first=computeFirst(g2);
+    const follow=computeFollow(g2,first);
+    const{table,terminals,conflicts}=buildTable(g2,first,follow);
+    ST={g0,g1,g2,first,follow,table,terminals,conflicts};
+
+    // Transformed
+    document.getElementById('outLF').textContent=gStr(g1);
+    document.getElementById('outLR').textContent=gStr(g2);
+
+    // FIRST table
+    const fb=document.getElementById('firstTbl').querySelector('tbody');
+    fb.innerHTML=g2.order.map(nt=>
+      `<tr><td>${nt}</td><td>{ ${[...first[nt]].sort().join(', ')} }</td></tr>`
+    ).join('');
+
+    // FOLLOW table
+    const flb=document.getElementById('followTbl').querySelector('tbody');
+    flb.innerHTML=g2.order.map(nt=>
+      `<tr><td>${nt}</td><td>{ ${[...follow[nt]].sort().join(', ')} }</td></tr>`
+    ).join('');
+
+    // Parsing table
+    const isLL1=conflicts.length===0;
+    document.getElementById('tblBadge').innerHTML=isLL1
+      ?'<span class="badge badge-ok"><span class="dot dot-ok"></span>Grammar is LL(1)</span>'
+      :'<span class="badge badge-err"><span class="dot dot-err"></span>Not LL(1)</span>';
+
+    const ci=document.getElementById('conflictInfo');
+    if(!isLL1){
+      ci.innerHTML='<div class="conflict-info">Conflicts detected: '+[...new Set(conflicts)].join('  ·  ')+'</div>';
+    } else ci.innerHTML='';
+
+    let th='<thead><tr><th>NT \\ Terminal</th>'+terminals.map(t=>'<th>'+t+'</th>').join('')+'</tr></thead>';
+    let tb='<tbody>'+g2.order.map(nt=>{
+      return '<tr><td class="nt-cell">'+nt+'</td>'+terminals.map(t=>{
+        const e=table[nt]&&table[nt][t];
+        return e?'<td class="entry">'+nt+' → '+e.join(' ')+'</td>':'<td class="empty">—</td>';
+      }).join('')+'</tr>';
+    }).join('')+'</tbody>';
+    document.getElementById('ptTbl').innerHTML=th+tb;
+
+    // Stats
+    const allT=new Set();
+    for(const nt of g2.order)for(const p of g2.productions[nt])for(const s of p)if(isTerm(s,g2.productions))allT.add(s);
+    let totalP=0;for(const nt of g2.order)totalP+=g2.productions[nt].length;
+    document.getElementById('stNT').textContent=g2.order.length;
+    document.getElementById('stT').textContent=allT.size;
+    document.getElementById('stP').textContent=totalP;
+    document.getElementById('stC').textContent=conflicts.length;
+    document.getElementById('ll1badge').innerHTML=isLL1
+      ?'<span class="badge badge-ok" style="width:100%;justify-content:center"><span class="dot dot-ok"></span>LL(1) — No conflicts found</span>'
+      :'<span class="badge badge-err" style="width:100%;justify-content:center"><span class="dot dot-err"></span>Not LL(1) — Conflicts exist</span>';
+
+    document.getElementById('sideStats').style.display='block';
+    document.getElementById('emptyState').style.display='none';
+    document.getElementById('mainContent').style.display='block';
+    document.getElementById('traceCard').style.display='none';
+    showTab(0);
+  }catch(e){
+    errEl.textContent='Error: '+e.message;
+    errEl.style.display='block';
+  }
+}
+
+function doparse(){
+  const perrEl=document.getElementById('perr');
+  perrEl.style.display='none';
+  document.getElementById('traceCard').style.display='none';
+  const{g2,table,conflicts}=ST;
+  if(!g2){perrEl.textContent='Analyze a grammar first.';perrEl.style.display='block';return;}
+  if(conflicts&&conflicts.length){perrEl.textContent='Grammar is not LL(1) — cannot parse.';perrEl.style.display='block';return;}
+  const raw=document.getElementById('pinput').value.trim();
+  if(!raw){perrEl.textContent='Enter an input string.';perrEl.style.display='block';return;}
+  const tokens=raw.split(/\s+/).filter(Boolean);
+  tokens.push('$');
+  const stack=['$',g2.startSymbol];
+  let ptr=0;const steps=[];let accepted=false,errMsg='';
+  while(stack.length){
+    const top=stack[stack.length-1],cur=tokens[ptr];
+    const stackStr=[...stack].reverse().join(' '),inputLeft=tokens.slice(ptr).join(' ');
+    if(top==='$'&&cur==='$'){
+      steps.push({s:stackStr,i:inputLeft,a:'Accept',type:'accept'});
+      accepted=true;break;
+    }else if(top===cur){
+      steps.push({s:stackStr,i:inputLeft,a:'Match  '+cur,type:''});
+      stack.pop();ptr++;
+    }else if(isNT(top,g2.productions)){
+      const prod=table[top]&&table[top][cur];
+      if(!prod){
+        steps.push({s:stackStr,i:inputLeft,a:'ERROR: no entry M['+top+']['+cur+']',type:'error'});
+        errMsg='Unexpected \''+cur+'\' — expected: '+Object.keys(table[top]||{}).join(', ');
+        break;
+      }
+      steps.push({s:stackStr,i:inputLeft,a:top+' → '+prod.join(' '),type:''});
+      stack.pop();
+      if(!(prod.length===1&&prod[0]==='epsilon'))
+        for(let i=prod.length-1;i>=0;i--)stack.push(prod[i]);
+    }else{
+      steps.push({s:stackStr,i:inputLeft,a:'ERROR: expected '+top+' got '+cur,type:'error'});
+      errMsg='Expected \''+top+'\' but got \''+cur+'\'';
+      break;
+    }
+    if(steps.length>500)break;
+  }
+
+  document.getElementById('parseResult').innerHTML=accepted
+    ?'<span class="badge badge-ok"><span class="dot dot-ok"></span>Accepted</span>'
+    :'<span class="badge badge-err"><span class="dot dot-err"></span>Rejected — '+errMsg+'</span>';
+
+  document.getElementById('traceTbl').innerHTML=steps.map((s,i)=>
+    '<tr class="'+(s.type==='accept'?'tr-accept':s.type==='error'?'tr-error':'')+'">'+
+    '<td>'+(i+1)+'</td><td>'+s.s+'</td><td>'+s.i+'</td><td>'+s.a+'</td></tr>'
+  ).join('');
+
+  document.getElementById('traceCard').style.display='block';
+}
+</script>
+</body>
+</html>
